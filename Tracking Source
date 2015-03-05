@@ -1,0 +1,2693 @@
+#include<opencv\cv.h>
+#include<opencv\highgui.h>
+#include<opencv/cvaux.h>
+#include<opencv/cxcore.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<time.h>
+#include<Windows.h>
+#using "System.dll"
+
+//#include"Serial.h"
+using namespace std;
+
+using namespace System;
+
+using namespace System::IO::Ports;
+
+struct post
+{
+	int x = 0;
+	int y = 0;
+	int shape = 0;
+	int row = 0;
+	int col = 0;
+	int height = 0;
+	int width = 0;
+}pos[40], temp, test;
+
+char str1[11];
+bool ac = false;
+
+//c[0] = 'w';
+
+/////////////////////////////
+int cam_port = 0;
+int min_x_dist = 20, min_y_dist = 20;
+int ori_range = 3;//prevoius 5
+int bot_range = 12;//previous 5
+int err_level = 5;//previous 3
+////////////////////////////
+int key = 0;
+int led, stopping;
+int dir;
+int axis;
+int ori = 0;
+int lx = 0, ly = 0, rx = 0, ry = 0;
+int Rmin_LE = 107, Gmin_LE = 77, Bmin_LE = 45, Rmax_LE = 200, Gmax_LE = 137, Bmax_LE = 75, Area_LE = 300;  //zxc.png
+int Rmin_RI = 137, Gmin_RI = 48, Bmin_RI = 75, Rmax_RI = 202, Gmax_RI = 103, Bmax_RI = 136, Area_RI = 400;  //zxc.png 
+int p = 0;
+int r = 0, c = 0;
+int front = -1, rear = 0;
+bool start;
+int *pathq = (int  *)malloc((sizeof(int))*p);
+int pr, pc, nr, nc;
+int paths[25];
+int top = -1;
+int leftb, rightb, act, orien;
+
+int f = 0;
+int prex, prey;
+post sfinal[9][9];
+
+IplImage* img_orig;
+IplImage* img;
+
+void moveplus();
+void tracking();
+
+
+
+void retreat()
+{
+	front = paths[top] % 100;
+	nr = pathq[front] / 10;
+	nc = pathq[front] % 10;
+	moveplus();
+}
+
+void check()
+{
+	if (nr < 0 || nc < 0 || nr > r || nc > c)
+		retreat();
+	else
+	{
+		for (int w = 1; w < front; w++)
+		{
+			if ((pathq[front] == pathq[w]) && (pathq[front - 1] == pathq[w - 1]))
+				retreat();
+		}
+	}
+}
+
+void moveplus()
+{
+	if (top == -1)
+	{
+		printf("\nno path.......error");
+		cvWaitKey(0);
+		exit(0);
+	}
+	int d = paths[top] / 100;
+	top--;
+	if (d == 1)
+	{
+		pr = nr;
+		pc = nc;
+		nr--;
+	}
+
+	if (d == 2)
+	{
+		pr = nr;
+		pc = nc;
+		nc++;
+	}
+
+	if (d == 3)
+	{
+		pr = nr;
+		pc = nc;
+		nr++;
+	}
+
+	if (d == 4)
+	{
+		pr = nr;
+		pc = nc;
+		nc--;
+	}
+	pathq[++front] = nr * 10 + nc;
+	if (pathq[front] == 24)
+	{
+		printf("( %d %d %d %d %d)", nr, nc, pr, pc, front);
+	}
+
+	check();
+}
+
+void redsquare()
+{
+	retreat();
+}
+
+void bluesquare()
+{
+	if (pr == nr)
+	{
+		if (pc < nc)
+		{
+			pc = nc;
+			nc++;
+		}
+		else
+		{
+			pc = nc;
+			nc--;
+		}
+	}
+	else
+	{
+		if (pr < nr)
+		{
+			pr = nr;
+			nr++;
+		}
+		else
+		{
+			pr = nr;
+			nr--;
+		}
+	}
+
+	check();
+
+	pathq[++front] = nr * 10 + nc;
+}
+
+void whitesquare()
+{
+	if (pr == nr)
+	{
+		if (pc < nc)
+		{
+			pc = nc;
+			nc++;
+		}
+		else
+		{
+			pc = nc;
+			nc--;
+		}
+	}
+	else
+	{
+		if (pr < nr)
+		{
+			pr = nr;
+			nr++;
+		}
+		else
+		{
+			pr = nr;
+			nr--;
+		}
+	}
+
+	check();
+	pathq[++front] = nr * 10 + nc;
+}
+
+void blacksquare()
+{
+	if (pr == nr)
+	{
+		if (pc < nc)
+		{
+			pc = nc;
+			nc++;
+		}
+		else
+		{
+			pc = nc;
+			nc--;
+		}
+	}
+	else
+	{
+		if (pr < nr)
+		{
+			pr = nr;
+			nr++;
+		}
+		else
+		{
+			pr = nr;
+			nr--;
+		}
+	}
+	check();
+	pathq[++front] = nr * 10 + nc;
+}
+
+void blackplus()
+{
+	if (pr == nr)
+	{
+		if (pc < nc) //1,2,3 possible
+		{
+			paths[++top] = front + 100;
+			paths[++top] = front + 200;
+			paths[++top] = front + 300;
+		}
+		else //1,3,4 possible
+		{
+			paths[++top] = front + 100;
+			paths[++top] = front + 300;
+			paths[++top] = front + 400;
+		}
+	}
+	else
+	{
+		if (pr < nr)//4,2,3 possible
+		{
+			paths[++top] = front + 200;
+			paths[++top] = front + 300;
+			paths[++top] = front + 400;
+		}
+		else//1,2,4 possible
+		{
+			paths[++top] = front + 100;
+			paths[++top] = front + 200;
+			paths[++top] = front + 400;
+		}
+	}
+
+	moveplus();
+}
+
+void triangleup()
+{
+	if (pc == nc&&nr > pr)
+		retreat();
+	else
+	{
+
+		pr = nr;
+		pc = nc;
+		nr--;
+
+		check();
+		pathq[++front] = nr * 10 + nc;
+	}
+}
+
+void triangleright()
+{
+	if (pr == nr&&nc < pc)
+		retreat();
+	else
+	{
+
+		pr = nr;
+		pc = nc;
+		nc++;
+
+		check();
+		pathq[++front] = nr * 10 + nc;
+	}
+}
+
+void triangledown()
+{
+	if (pc == nc&&nr < pr)
+		retreat();
+	else
+	{
+		pr = nr;
+		pc = nc;
+		nr++;
+
+		check();
+		pathq[++front] = nr * 10 + nc;
+	}
+}
+
+void triangleleft()
+{
+	if (pr == nr&&nc > pc)
+		retreat();
+	else
+	{
+		pr = nr;
+		pc = nc;
+		nc--;
+
+		check();
+		pathq[++front] = nr * 10 + nc;
+	}
+}
+
+void beg()
+{
+	retreat();
+}
+
+void stop()
+{
+	f = 1;
+}
+
+bool rearcross()
+{
+	if (axis == 1)
+	{
+		if ((sfinal[pathq[rear] / 10][pathq[rear] % 10].y - (sfinal[pathq[rear] / 10][pathq[rear] % 10].height) / 2) > (((ry + ly) / 2) + (sfinal[pathq[0] / 10][pathq[0] % 10].height * 12) / 10))
+			return true;
+		else return false;
+	}
+	else if (axis == 3)
+	{
+		if ((sfinal[pathq[rear] / 10][pathq[rear] % 10].y + (sfinal[pathq[rear] / 10][pathq[rear] % 10].height) / 2) < (((ry + ly) / 2) - (sfinal[pathq[0] / 10][pathq[0] % 10].height * 12) / 10))
+			return true;
+		else return false;
+	}
+	else if (axis == 4)
+	{
+		if ((sfinal[pathq[rear] / 10][pathq[rear] % 10].x - (sfinal[pathq[rear] / 10][pathq[rear] % 10].width) / 2) > (((rx + lx) / 2) + (sfinal[pathq[0] / 10][pathq[0] % 10].width * 12) / 10))
+			return true;
+		else return false;
+	}
+	else if (axis == 2)
+	{
+		if ((sfinal[pathq[rear] / 10][pathq[rear] % 10].x + (sfinal[pathq[rear] / 10][pathq[rear] % 10].width) / 2) < (((rx + lx) / 2) - (sfinal[pathq[0] / 10][pathq[0] % 10].height * 12) / 10))
+			return true;
+		else return false;
+	}
+	else
+		return false;
+}
+
+void  action()
+{
+	if (sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].shape == 2)
+	{
+		stopping = 0;
+		if (rearcross())
+		{
+			if (led < 2)
+			{
+				act = 2;
+				led++;
+			}
+			else act = 0;
+
+		}
+		else act = 0;
+
+		//str1[8] = '2';
+	}
+	else if (sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].shape == 3)
+	{
+		led = 0;
+		if (rearcross())
+		{
+			if (stopping < 5)
+			{
+				stopping++;
+				act = 1;
+			}
+			else act = 0;
+		}
+		else act = 0;
+	}
+	else
+	{
+		//str1[8] = '0';
+		led = 0;
+		stopping = 0;
+		act = 0;
+	}
+}
+
+void movement()
+{
+	int x1 = pathq[rear] / 10;
+	int y1 = pathq[rear] % 10;
+	int r2 = sfinal[x1][y1].row;
+	int c2 = sfinal[x1][y1].col;
+	int r3 = sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].row;
+	int c3 = sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].col;
+
+	if (c3 == c2&&r3 < r2)
+		axis = 1;
+	if (c3 == c2&&r3 > r2)
+		axis = 3;
+	if (c3>c2&&r3 == r2)
+		axis = 2;
+	if (c3<c2&&r3 == r2)
+		axis = 4;
+
+}
+
+void orientation()
+{
+	if (ori != axis)
+	{
+		printf("%d    ", rear);
+		if (lx < rx&&abs(ly - ry) < ori_range)
+		{
+			ori = 1;
+		}
+		else if (lx > rx&&abs(ly - ry) < ori_range)
+			ori = 3;
+		else if (ly < ry&&abs(lx - rx) < ori_range)
+		{
+			ori = 2;
+		}
+		else if (ly > ry&&abs(lx - rx) < ori_range)
+			ori = 4;
+		else
+		{
+			ori = 0;
+			if (rear > 0)
+			{
+				if (sfinal[pathq[rear - 1] / 10][pathq[rear - 1] % 10].row - sfinal[pathq[rear] / 10][pathq[rear] % 10].row == 1)
+				{
+					if (sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].col - sfinal[pathq[rear] / 10][pathq[rear] % 10].col == 1)
+					{
+						/*str1[0] = '$';
+						str1[2] = 'c';
+						str1[1] = 'o';
+						str1[3] = '#';*/
+						orien = 1;
+						/*str[5] = '\0';
+						str[6] = '\0';
+						str[7] = '\0';
+						str[8] = '\0';
+						str[9] = '\0';
+						str[10] = '\0';
+						*/
+						//String^ test = gcnew String(str);
+						//printf("%s", test);
+
+					}
+					else
+					{
+						/*str1[0] = '$';
+						str1[2] = 'a';
+						str1[1] = 'r';
+						str1[3] = '#';*/
+						orien = 2;
+						/*str1[5] = '\0';
+						str1[6] = '\0';
+						str1[7] = '\0';
+						str1[8] = '\0';
+						str1[9] = '\0';
+						str[10] = '\0';*/
+					}
+
+				}
+
+				else  if (sfinal[pathq[rear - 1] / 10][pathq[rear - 1] % 10].row - sfinal[pathq[rear] / 10][pathq[rear] % 10].row == -1)
+				{
+					if (sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].col - sfinal[pathq[rear] / 10][pathq[rear] % 10].col == 1)
+					{
+						/*str1[0] = '$';
+						str1[2] = 'a';
+						str1[1] = 'o';
+						str1[3] = '#';*/
+						orien = 2;
+						/*str[5] = '\0';
+						str[6] = '\0';
+						str[7] = '\0';
+						str[8] = '\0';
+						str[9] = '\0';
+						str[10] = '\0';*/
+					}
+					else
+					{
+						/*str1[0] = '$';
+						str1[2] = 'c';
+						str1[1] = 'o';
+						str1[3] = '#';*/
+						orien = 1;
+						/*str[5] = '\0';
+						str[6] = '\0';
+						str[7] = '\0';
+						str[8] = '\0';
+						str[9] = '\0';
+						str[10] = '\0';*/
+					}
+
+				}
+
+				else if (sfinal[pathq[rear - 1] / 10][pathq[rear - 1] % 10].col - sfinal[pathq[rear] / 10][pathq[rear] % 10].col == 1)
+				{
+					if (sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].row - sfinal[pathq[rear] / 10][pathq[rear] % 10].row == 1)
+					{
+						/*str1[0] = '$';
+						str1[2] = 'a';
+						str1[1] = 'o';
+						str1[3] = '#';*/
+						orien = 2;
+						/*str1[5] = '\0';
+						str[6] = '\0';
+						str[7] = '\0';
+						str[8] = '\0';
+						str[9] = '\0';
+						str[10] = '\0';*/
+					}
+					else
+					{
+						/*str1[0] = '$';
+						str1[2] = 'c';
+						str1[1] = 'o';
+						str1[3] = '#';*/
+						orien = 1;
+						/*str[5] = '\0';
+						str[6] = '\0';
+						str[7] = '\0';
+						str[8] = '\0';
+						str[9] = '\0';
+						str[10] = '\0';*/
+					}
+
+				}
+
+				else  if (sfinal[pathq[rear - 1] / 10][pathq[rear - 1] % 10].col - sfinal[pathq[rear] / 10][pathq[rear] % 10].col == -1)
+				{
+					if (sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].row - sfinal[pathq[rear] / 10][pathq[rear] % 10].row == 1)
+					{
+						/*str1[0] = '$';
+						str1[2] = 'c';
+						str1[1] = 'o';
+						str1[3] = '#';*/
+						orien = 1;
+						/*str1[4] = '\0';
+						str[5] = '\0';
+						str[6] = '\0';
+						str[7] = '\0';
+						str[8] = '\0';
+						str[9] = '\0';
+						str[10] = '\0';*/
+					}
+					else
+					{
+						/*str1[0] = '$';
+						str1[2] = 'a';
+						str1[1] = 'o';
+						str1[3] = '#';*/
+						orien = 2;
+						/*str[5] = '\0';
+						str[6] = '\0';
+						str[7] = '\0';
+						str[8] = '\0';
+						str[9] = '\0';
+						str[10] = '\0';*/
+					}
+				}
+			}
+		}
+	}
+}
+
+int checkerror()
+{
+	int error;
+	if (axis == 1)
+	{
+		error = ((lx + rx) / 2) - sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].x;
+	}
+	if (axis == 3)
+	{
+		error = -((lx + rx) / 2) + sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].x;
+	}
+	if (axis == 2)
+	{
+		error = ((ly + ry) / 2) - sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].y;
+	}
+	if (axis == 4)
+	{
+		error = -((ly + ry) / 2) + sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].y;
+	}
+	if (abs(error) < 3 && error >= 0)
+		return 1;
+	else if (abs(error) < 7&& error >= 0)
+		return 2;
+	else if (abs(error) < 15 && error >= 0)
+		return 3;
+	else if (abs(error) < 30 && error >= 0)
+		return 4;
+	else if (abs(error) < 50 && error >= 0)
+		return 5;
+	else if (abs(error) < 50 && error >= 0)
+		return 6;
+	else if (abs(error) < 55 && error >= 0)
+		return 7;
+	else if (abs(error) < 55 && error >= 0)
+		return 8;
+
+
+	else if (abs(error) < 3&& error < 0)
+		return -1;
+	else if (abs(error) < 7 && error < 0)
+		return -2;
+	else if (abs(error) < 15 && error < 0)
+		return -3;
+	else if (abs(error) < 30 && error < 0)
+		return -4;
+	else if (abs(error) < 50 && error < 0)
+		return -5;
+	else if (abs(error) < 50 && error < 0)
+		return -6;
+	else if (abs(error) < 55 && error < 0)
+		return -7;
+	else if (abs(error) < 60 && error < 0)
+		return -8;
+
+
+}
+
+void upward()
+{
+	int error = checkerror();
+	if (error < 0)
+	{
+		error = 8 + error;
+		/*str1[0] = '$';
+		str1[2] = error + 48;
+		str1[1] = 'r';
+		str1[3] = 'l';
+		str1[4] = '8';
+		str1[5] = 'o';
+		str1[6] = '0';
+		str1[7] = '@';
+		action();
+		str1[9] = '#';*/
+		action();
+		leftb = 8;
+		rightb = error;
+		if (rightb <= 0)
+		{
+			rightb = 1;
+		}
+	}
+	else
+	{
+		error = 8 - error;
+		/*str1[0] = '$';
+		str1[2] = '9';
+		str1[1] = 'r';
+		str1[3] = 'l';
+		str1[4] = error + 48;
+		str1[5] = 'o';
+		str1[6] = '0';
+		str1[7] = '@';
+		action();
+		str1[9] = '#';*/
+		action();
+		leftb = error;
+		rightb = 8;
+		if (leftb <= 0)
+			leftb = 1;
+	}
+}
+
+void sideward()
+{
+	int error = checkerror();
+	if (error < 0)
+	{
+		error = 8 + error;
+		/*str1[0] = '$';
+		str1[2] = error + 48;
+		str1[1] = 'R';
+		str1[3] = 'L';
+		str1[4] = '9';
+		str1[5] = 'O';
+		str1[6] = '0';
+		str1[7] = '@';
+		action();
+		str1[9] = '#';*/
+		action();
+		leftb = 8;
+		rightb = error;
+		if (rightb <= 0)
+			rightb = 1;
+	}
+	else
+	{
+		error = 8 - error;
+		/*str1[0] = '$';
+		str1[2] = '9';
+		str1[1] = 'R';
+		str1[3] = 'L';
+		str1[4] = error + 48;
+		str1[5] = 'O';
+		str1[6] = '0';
+		str1[7] = '@';
+		action();
+		str1[9] = '#';*/
+		leftb = error;
+		rightb = 8;
+		if (leftb <= 0)
+			leftb = 1;
+	}
+}
+
+
+void botmove()
+{
+
+
+	SerialPort sp;
+
+	sp.PortName = "COM14";
+	sp.BaudRate = 9600;
+	sp.Open();
+
+
+	if (orien == 0)
+	{
+		// NO act
+		if (act == 0)
+		{
+			if (leftb == 8)
+			{
+				if (rightb == 1)
+				{
+					sp.Write("$r1l8o0@0#");
+					printf("$r1l8o0@0#\n");
+				}
+				else if (rightb == 2)
+				{
+					sp.Write("$r2l8o0@0#");
+					printf("$r2l8o0@0#\n");
+				}
+				else if (rightb == 3)
+				{
+					sp.Write("$r3l8o0@0#");
+					printf("$r3l8o0@0#\n");
+				}
+				else if (rightb == 4)
+				{
+					sp.Write("$r4l8o0@0#");
+					printf("$r4l8o0@0#\n");
+				}
+				else if (rightb == 5)
+				{
+					sp.Write("$r5l8o0@0#");
+					printf("$r5l8o0@0#\n");
+				}
+				else if (rightb == 6)
+				{
+					sp.Write("$r6l8o0@0#");
+					printf("$r6l8o0@0#\n");
+				}
+				else if (rightb == 7)
+				{
+					sp.Write("$r7l8o0@0#");
+					printf("$r7l8o0@0#\n");
+				}
+				else if (rightb == 8)
+				{
+					sp.Write("$r8l8o0@0#");
+					printf("$r8l8o0@0#\n");
+				}
+			}
+				//rightb
+			else if (rightb == 8)
+			{
+					if (leftb == 1)
+					{
+						sp.Write("$r8l1o0@0#");
+						printf("$r8l1o0@0#\n");
+					}
+					else if (leftb == 2)
+					{
+						sp.Write("$r8l2o0@0#");
+						printf("$r8l2o0@0#\n");
+					}
+					else if (leftb == 3)
+					{
+						sp.Write("$r8l3o0@0#");
+						printf("$r8l3o0@0#\n");
+					}
+					else if (leftb == 4)
+					{
+						sp.Write("$r8l4o0@0#");
+						printf("$r8l4o0@0#\n");
+					}
+					else if (leftb == 5)
+					{
+						sp.Write("$r8l5o0@0#");
+						printf("$r8l5o0@0#\n");
+					}
+					else if (leftb == 6)
+					{
+						sp.Write("$r8l6o0@0#");
+						printf("$r8l6o0@0#\n");
+					}
+					else if (leftb == 7)
+					{
+						sp.Write("$r8l7o0@0#");
+						printf("$r8l7o0@0#\n");
+					}
+					else if (leftb == 8)
+					{
+						sp.Write("$r8l8o0@0#");
+						printf("$r8l8o0@0#\n");
+					}
+			}
+		}
+		
+		// act == 1
+		if (act == 1)
+		{
+			if (leftb == 8)
+			{
+				if (rightb == 1)
+				{
+					sp.Write("$r1l8o0@1#");
+					printf("$r1l8o0@1#\n");
+				}
+				else if (rightb == 2)
+				{
+					sp.Write("$r2l8o0@1#");
+					printf("$r2l8o0@1#\n");
+				}
+				else if (rightb == 3)
+				{
+					sp.Write("$r3l8o0@1#");
+					printf("$r3l8o0@1#\n");
+				}
+				else if (rightb == 4)
+				{
+					sp.Write("$r4l8o0@1#");
+					printf("$r4l8o0@1#\n");
+				}
+				else if (rightb == 5)
+				{
+					sp.Write("$r5l8o0@1#");
+					printf("$r5l8o0@1#\n");
+				}
+				else if (rightb == 6)
+				{
+					sp.Write("$r6l8o0@1#");
+					printf("$r6l8o0@1#\n");
+				}
+				else if (rightb == 7)
+				{
+					sp.Write("$r7l8o0@1#");
+					printf("$r7l8o0@1#\n");
+				}
+				else if (rightb == 8)
+				{
+					sp.Write("$r8l8o0@1#");
+					printf("$r8l8o0@1#\n");
+				}
+			}
+
+			//rightb
+			if (rightb == 8)
+			{
+				if (leftb == 1)
+				{
+					sp.Write("$r8l1o0@1#");
+					printf("$r8l1o0@1#\n");
+				}
+				else if (leftb == 2)
+				{
+					sp.Write("$r8l2o0@1#");
+					printf("$r8l2o0@1#\n");
+				}
+				else if (leftb == 3)
+				{
+					sp.Write("$r8l3o0@1#");
+					printf("$r8l3o0@1#\n");
+				}
+				else if (leftb == 4)
+				{
+					sp.Write("$r8l4o0@1#");
+					printf("$r8l4o0@1#\n");
+				}
+				else if (leftb == 5)
+				{
+					sp.Write("$r8l5o0@1#");
+					printf("$r8l5o0@1#\n");
+				}
+				else if (leftb == 6)
+				{
+					sp.Write("$r8l6o0@1#");
+					printf("$r8l6o0@1#\n");
+				}
+				else if (leftb == 7)
+				{
+					sp.Write("$r8l7o0@1#");
+					printf("$r8l7o0@1#\n");
+				}
+				else if (leftb == 8)
+				{
+					sp.Write("$r8l8o0@1#");
+					printf("$r8l8o0@1#\n");
+				}
+			}
+		}
+
+		//act == 2
+		if (act == 2)
+		{
+			if (leftb == 8)
+			{
+				if (rightb == 1)
+				{
+					sp.Write("$r1l8o0@2#");
+					printf("$r1l8o0@2#\n");
+				}
+				else if (rightb == 2)
+				{
+					sp.Write("$r2l8o0@2#");
+					printf("$r2l8o0@2#\n");
+				}
+				else if (rightb == 3)
+				{
+					sp.Write("$r3l8o0@2#");
+					printf("$r3l8o0@2#\n");
+				}
+				else if (rightb == 4)
+				{
+					sp.Write("$r4l8o0@2#");
+					printf("$r4l8o0@2#\n");
+				}
+				else if (rightb == 5)
+				{
+					sp.Write("$r5l8o0@2#");
+					printf("$r5l8o0@2#\n");
+				}
+				else if (rightb == 6)
+				{
+					sp.Write("$r6l8o0@2#");
+					printf("$r6l8o0@2#");
+				}
+				else if (rightb == 7)
+				{
+					sp.Write("$r7l8o0@2#");
+					printf("$r7l8o0@2#\n");
+				}
+				else if (rightb == 8)
+				{
+					sp.Write("$r8l8o0@2#");
+					printf("$r8l8o0@2#\n");
+				}
+			}
+
+			//rightb
+			else if (rightb == 8)
+			{
+				if (leftb == 1)
+				{
+					sp.Write("$r8l1o0@2#");
+					printf("$r8l1o0@2#\n");
+				}
+				else if (leftb == 2)
+				{
+					sp.Write("$r8l2o0@2#");
+					printf("$r8l2o0@2#\n");
+				}
+				else if (leftb == 3)
+				{
+					sp.Write("$r8l3o0@2#");
+					printf("$r8l3o0@2#\n");
+				}
+				else if (leftb == 4)
+				{
+					sp.Write("$r8l4o0@2#");
+					printf("$r8l4o0@2#\n");
+				}
+				else if (leftb == 5)
+				{
+					sp.Write("$r8l5o0@2#");
+					printf("$r8l5o0@2#\n");
+				}
+				else if (leftb == 6)
+				{
+					sp.Write("$r8l6o0@2#");
+					printf("$r8l6o0@2#\n");
+				}
+				else if (leftb == 7)
+				{
+					sp.Write("$r8l7o0@2#");
+					printf("$r8l7o0@2#\n");
+				}
+				else if (leftb == 8)
+				{
+					sp.Write("$r8l8o0@2#");
+					printf("$r8l8o0@2#\n");
+				}
+			}
+		}
+
+	}
+
+	else if (orien == 1)
+	{
+		sp.Write("$oc#");
+		printf("$oc#\n");
+	}
+	else if (orien == 2)
+	{
+		sp.Write("$oa#");
+		printf("$oa#\n");
+	}
+	sp.Close();
+
+}
+
+
+
+
+/*
+1. Red Square
+2. Blue Square
+3. White Square
+4. Black Square
+5. Black Plus
+6. Black Triangle turn up
+7. Black Triangle turn right
+8. Black Triangle turn down
+9. Black Triangle turn left
+10. Start
+11. End
+*/
+
+
+
+void pathline()
+{
+	movement();
+	orientation();
+	checkerror();
+	if (ori == axis)
+	{
+		if (axis == 1 || axis == 3)
+		{
+			if (abs(((ly + ry) / 2) - sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].y) < bot_range)
+			{
+				rear++;
+			}
+			else upward();
+		}
+
+		if (axis == 2 || axis == 4)
+		{
+			if (abs(((lx + rx) / 2) - sfinal[pathq[rear + 1] / 10][pathq[rear + 1] % 10].x) < bot_range)
+			{
+				rear++;
+			}
+			else
+				sideward();
+		}
+	}
+	if (sfinal[pathq[rear] / 10][pathq[rear] % 10].shape == 11)
+	{
+		//sp.Write("$######################");
+		printf("qwe");
+		SerialPort kd;
+		kd.Write("$################");
+		exit(0);
+	}
+	//botmove();
+	
+
+
+}
+
+
+int main()
+{
+	/*CSerial serial;
+	if (serial.Open(2, 9600))
+	printf("Port opened successfully");
+	else
+	printf("Failed to open port!");*/
+
+
+
+	CvCapture* p_capWebcam;
+	p_capWebcam = cvCaptureFromCAM(cam_port);
+
+	img = cvQueryFrame(p_capWebcam);
+	img_orig = cvCreateImage(cvGetSize(img), img->depth, img->nChannels);
+#pragma region WebCam
+
+	if (p_capWebcam == NULL) {
+		printf("error: Capturing \n");
+		getchar();
+		return(-1);
+	}
+
+	cvNamedWindow("Original", CV_WINDOW_AUTOSIZE);
+
+
+	while (1){
+
+		img = cvQueryFrame(p_capWebcam);
+		cvCopy(img, img_orig);
+
+
+		if (img == NULL) {
+			printf("error :No Frame\n");
+			getchar();
+			break;
+		}
+
+		cvShowImage("Original", img);
+
+		char c = cvWaitKey(10);
+		if (c == 'y')
+		{
+			key = 1;
+			break;
+		}
+		else if (c == 'c')
+		{
+			key = 0;
+			break;
+		}
+	}
+
+#pragma endregion
+
+
+	CvFont * font = new CvFont;
+	cvInitFont(font, CV_FONT_VECTOR0, 0.5f, 1.0f, 0, 1, 8);
+
+#pragma region Image init
+
+#pragma region Original and Grayscale
+
+	IplImage* imgGrayScale_LE = cvCreateImage(cvGetSize(img), 8, 1);
+	IplImage* imgGrayScale_RI = cvCreateImage(cvGetSize(img), 8, 1);
+	IplImage* imgGrayScale_R = cvCreateImage(cvGetSize(img), 8, 1);
+	IplImage* imgGrayScale_B = cvCreateImage(cvGetSize(img), 8, 1);
+	IplImage* imgGrayScale_W = cvCreateImage(cvGetSize(img), 8, 1);
+	IplImage* imgGrayScale_BL = cvCreateImage(cvGetSize(img), 8, 1);
+	IplImage* imgGrayScale_Y = cvCreateImage(cvGetSize(img), 8, 1);
+#pragma endregion
+
+#pragma region Smaller Grayscale
+	int percent = 40; //For small threshold image
+
+	IplImage* imgGrayScale_LEs = cvCreateImage(cvSize((int)((img->width*percent) / 100), (int)((img->height*percent) / 100)), 8, 1);
+	IplImage* imgGrayScale_RIs = cvCreateImage(cvSize((int)((img->width*percent) / 100), (int)((img->height*percent) / 100)), 8, 1);
+	IplImage* imgGrayScale_Rs = cvCreateImage(cvSize((int)((img->width*percent) / 100), (int)((img->height*percent) / 100)), 8, 1);
+	IplImage* imgGrayScale_Bs = cvCreateImage(cvSize((int)((img->width*percent) / 100), (int)((img->height*percent) / 100)), 8, 1);
+	IplImage* imgGrayScale_Ws = cvCreateImage(cvSize((int)((img->width*percent) / 100), (int)((img->height*percent) / 100)), 8, 1);
+	IplImage* imgGrayScale_BLs = cvCreateImage(cvSize((int)((img->width*percent) / 100), (int)((img->height*percent) / 100)), 8, 1);
+	IplImage* imgGrayScale_Ys = cvCreateImage(cvSize((int)((img->width*percent) / 100), (int)((img->height*percent) / 100)), 8, 1);
+
+#pragma endregion
+
+#pragma endregion
+
+	int Rmin_R = 107, Gmin_R = 0, Bmin_R = 0, Rmax_R = 234, Gmax_R = 53, Bmax_R = 87, Area_R = 300;  //zxc.png 
+	int Rmin_B = 0, Gmin_B = 0, Bmin_B = 71, Rmax_B = 55, Gmax_B = 128, Bmax_B = 255, Area_B = 300; //top.png 
+	int Rmin_W = 153, Gmin_W = 146, Bmin_W = 152, Rmax_W = 168, Gmax_W = 166, Bmax_W = 176, Area_W = 300;
+	int Rmin_BL = 0, Gmin_BL = 0, Bmin_BL = 0, Rmax_BL = 75, Gmax_BL = 43, Bmax_BL = 115, Area_BL = 300;
+	int Rmin_Y = 141, Gmin_Y = 139, Bmin_Y = 21, Rmax_Y = 255, Gmax_Y = 255, Bmax_Y = 75, Area_Y = 300;
+	//int Rmin_RA = 0, Gmin_RA = 68, Bmin_RA = 0, Rmax_RA = 47, Gmax_RA = 91, Bmax_RA = 255, Area_RA = 300;  //zxc.png
+	//int Rmin_G = 98, Gmin_G = 0, Bmin_G = 0, Rmax_G = 232, Gmax_G = 45, Bmax_G = 136, Area_G = 400;  //zxc.png 
+	//int Rmin_LE = 150, Gmin_LE = 55, Bmin_LE = 0, Rmax_LE = 243, Gmax_LE = 173, Bmax_LE = 77, Area_LE = 300;
+	//int Rmin_RI = 150, Gmin_RI = 55, Bmin_RI = 0, Rmax_RI = 243, Gmax_RI = 173, Bmax_RI = 77, Area_RI = 300;
+
+	if (key == 0)
+	{
+		cvNamedWindow("Raw");
+		cvShowImage("Raw", img);
+		cvNamedWindow("Tracked");
+	}
+	char recalib = 'n';
+	while (recalib == 'n')
+	{
+
+		p = 0;
+#pragma region Calibration
+		if (key == 0)
+		{
+			cvNamedWindow("Red_thresh", CV_WINDOW_AUTOSIZE);
+			cvNamedWindow("Blue_thresh", CV_WINDOW_AUTOSIZE);
+			cvNamedWindow("Black_thresh", CV_WINDOW_AUTOSIZE);
+			cvNamedWindow("White_thresh", CV_WINDOW_AUTOSIZE);
+			cvNamedWindow("Yellow_thresh", CV_WINDOW_AUTOSIZE);
+			cvNamedWindow("Left_thresh", CV_WINDOW_AUTOSIZE);
+			cvNamedWindow("Right_thresh", CV_WINDOW_AUTOSIZE);
+
+#pragma region Trackbars
+
+			//left trackbar
+			cvNamedWindow("Left", 0);
+			cvResizeWindow("Left", 300, 300);
+
+
+			cvCreateTrackbar("R min", "Left", &Rmin_LE, 255);
+			cvCreateTrackbar("G min", "Left", &Gmin_LE, 255);
+			cvCreateTrackbar("B min", "Left", &Bmin_LE, 255);
+			cvCreateTrackbar("R max", "Left", &Rmax_LE, 255);
+			cvCreateTrackbar("G max", "Left", &Gmax_LE, 255);
+			cvCreateTrackbar("B max", "Left", &Bmax_LE, 255);
+			cvCreateTrackbar("Area ", "Left", &Area_LE, 2000);
+
+			//RIGHT TRACKBAR
+			cvNamedWindow("Right", 0);
+			cvResizeWindow("Right", 300, 300);
+
+
+			cvCreateTrackbar("R min", "Right", &Rmin_RI, 255);
+			cvCreateTrackbar("G min", "Right", &Gmin_RI, 255);
+			cvCreateTrackbar("B min", "Right", &Bmin_RI, 255);
+			cvCreateTrackbar("R max", "Right", &Rmax_RI, 255);
+			cvCreateTrackbar("G max", "Right", &Gmax_RI, 255);
+			cvCreateTrackbar("B max", "Right", &Bmax_RI, 255);
+			cvCreateTrackbar("Area ", "Right", &Area_RI, 2000);
+
+
+
+#pragma region Red trackbar
+			cvNamedWindow("Red", 0);
+			cvResizeWindow("Red", 300, 300);
+
+
+			cvCreateTrackbar("R min", "Red", &Rmin_R, 255);
+			cvCreateTrackbar("G min", "Red", &Gmin_R, 255);
+			cvCreateTrackbar("B min", "Red", &Bmin_R, 255);
+			cvCreateTrackbar("R max", "Red", &Rmax_R, 255);
+			cvCreateTrackbar("G max", "Red", &Gmax_R, 255);
+			cvCreateTrackbar("B max", "Red", &Bmax_R, 255);
+			cvCreateTrackbar("Area ", "Red", &Area_R, 2000);
+
+#pragma endregion
+
+#pragma region Blue trackbar
+			cvNamedWindow("Blue", 0);
+			cvResizeWindow("Blue", 300, 300);
+
+			//int Rmin_B = 58, Gmin_B = 68, Bmin_B = 203, Rmax_B = 204, Gmax_B = 197, Bmax_B = 233; //zxc.png 
+
+			cvCreateTrackbar("R min", "Blue", &Rmin_B, 255);
+			cvCreateTrackbar("G min", "Blue", &Gmin_B, 255);
+			cvCreateTrackbar("B min", "Blue", &Bmin_B, 255);
+			cvCreateTrackbar("R max", "Blue", &Rmax_B, 255);
+			cvCreateTrackbar("G max", "Blue", &Gmax_B, 255);
+			cvCreateTrackbar("B max", "Blue", &Bmax_B, 255);
+			cvCreateTrackbar("Area ", "Blue", &Area_B, 2000);
+
+#pragma endregion
+
+#pragma region White trackbar
+			cvNamedWindow("White", 0);
+			cvResizeWindow("White", 300, 300);
+
+			cvCreateTrackbar("Area ", "White", &Area_W, 2000);
+			cvCreateTrackbar("R min", "White", &Rmin_W, 255);
+			cvCreateTrackbar("G min", "White", &Gmin_W, 255);
+			cvCreateTrackbar("B min", "White", &Bmin_W, 255);
+			cvCreateTrackbar("R max", "White", &Rmax_W, 255);
+			cvCreateTrackbar("G max", "White", &Gmax_W, 255);
+			cvCreateTrackbar("B max", "White", &Bmax_W, 255);
+
+#pragma endregion
+
+#pragma region Black trackbar
+			cvNamedWindow("Black", 0);
+			cvResizeWindow("Black", 300, 300);
+
+			cvCreateTrackbar("R min", "Black", &Rmin_BL, 255);
+			cvCreateTrackbar("G min", "Black", &Gmin_BL, 255);
+			cvCreateTrackbar("B min", "Black", &Bmin_BL, 255);
+			cvCreateTrackbar("R max", "Black", &Rmax_BL, 255);
+			cvCreateTrackbar("G max", "Black", &Gmax_BL, 255);
+			cvCreateTrackbar("B max", "Black", &Bmax_BL, 255);
+			cvCreateTrackbar("Area ", "Black", &Area_BL, 2000);
+#pragma endregion
+
+#pragma region Yellow
+			cvNamedWindow("Yellow", 0);
+			cvResizeWindow("Yellow", 300, 300);
+
+			cvCreateTrackbar("R min", "Yellow", &Rmin_Y, 255);
+			cvCreateTrackbar("G min", "Yellow", &Gmin_Y, 255);
+			cvCreateTrackbar("B min", "Yellow", &Bmin_Y, 255);
+			cvCreateTrackbar("R max", "Yellow", &Rmax_Y, 255);
+			cvCreateTrackbar("G max", "Yellow", &Gmax_Y, 255);
+			cvCreateTrackbar("B max", "Yellow", &Bmax_Y, 255);
+			cvCreateTrackbar("Area ", "Yellow", &Area_Y, 2000);
+		}
+
+#pragma endregion
+
+#pragma endregion	
+
+		CvMemStorage *storage_LE = cvCreateMemStorage(0);
+		CvMemStorage *storage_RI = cvCreateMemStorage(0);
+		CvMemStorage *storage_R = cvCreateMemStorage(0); //storage area for all contours
+		CvMemStorage *storage_B = cvCreateMemStorage(0); //storage area for all contours
+		CvMemStorage *storage_W = cvCreateMemStorage(0); //storage area for all contours
+		CvMemStorage *storage_BL = cvCreateMemStorage(0); //storage area for all contours
+		CvMemStorage *storage_Y = cvCreateMemStorage(0); //storage area for all contours
+		CvSeq *contours_R, *contours_B, *contours_W, *contours_BL, *contours_Y, *contours_LE, *contours_RI;  //hold the pointer to a contour in the memory block
+		CvSeq* result;   //hold sequence of points of a contour
+
+#pragma region Calibration Loop
+
+		while (1)
+		{
+
+			cvInRangeS(img_orig, CV_RGB(Rmin_LE, Gmin_LE, Bmin_LE), CV_RGB(Rmax_LE, Gmax_LE, Bmax_LE), imgGrayScale_LE);
+			//cvSmooth(imgGrayScale_LE, imgGrayScale_LE, CV_GAUSSIAN, 9, 9);
+			cvResize(imgGrayScale_LE, imgGrayScale_LEs);
+			if (key == 0)
+				cvShowImage("Left_thresh", imgGrayScale_LEs);
+
+			cvInRangeS(img_orig, CV_RGB(Rmin_RI, Gmin_RI, Bmin_RI), CV_RGB(Rmax_RI, Gmax_RI, Bmax_RI), imgGrayScale_RI);
+			//cvSmooth(imgGrayScale_RI, imgGrayScale_RI, CV_GAUSSIAN, 9, 9);
+			cvResize(imgGrayScale_RI, imgGrayScale_RIs);
+			if (key == 0)
+				cvShowImage("Right_thresh", imgGrayScale_RIs);
+
+			cvInRangeS(img_orig, CV_RGB(Rmin_R, Gmin_R, Bmin_R), CV_RGB(Rmax_R, Gmax_R, Bmax_R), imgGrayScale_R);
+			//cvSmooth(imgGrayScale_R, imgGrayScale_R, CV_GAUSSIAN, 9, 9);
+			cvResize(imgGrayScale_R, imgGrayScale_Rs);
+			if (key == 0)
+				cvShowImage("Red_thresh", imgGrayScale_Rs);
+
+
+			cvInRangeS(img_orig, CV_RGB(Rmin_B, Gmin_B, Bmin_B), CV_RGB(Rmax_B, Gmax_B, Bmax_B), imgGrayScale_B);
+			//cvSmooth(imgGrayScale_B, imgGrayScale_B, CV_GAUSSIAN, 9, 9);
+			cvResize(imgGrayScale_B, imgGrayScale_Bs);
+			if (key == 0)
+				cvShowImage("Blue_thresh", imgGrayScale_Bs);
+
+
+			cvInRangeS(img_orig, CV_RGB(Rmin_W, Gmin_W, Bmin_W), CV_RGB(Rmax_W, Gmax_W, Bmax_W), imgGrayScale_W);
+			//cvSmooth(imgGrayScale_W, imgGrayScale_W, CV_GAUSSIAN, 9, 9);
+			cvResize(imgGrayScale_W, imgGrayScale_Ws);
+			if (key == 0)
+				cvShowImage("White_thresh", imgGrayScale_Ws);
+
+
+
+			cvInRangeS(img_orig, CV_RGB(Rmin_BL, Gmin_BL, Bmin_BL), CV_RGB(Rmax_BL, Gmax_BL, Bmax_BL), imgGrayScale_BL);
+			//cvSmooth(imgGrayScale_BL, imgGrayScale_BL, CV_GAUSSIAN, 9, 9);
+			cvResize(imgGrayScale_BL, imgGrayScale_BLs);
+			if (key == 0)
+				cvShowImage("Black_thresh", imgGrayScale_BLs);
+
+			cvInRangeS(img_orig, CV_RGB(Rmin_Y, Gmin_Y, Bmin_Y), CV_RGB(Rmax_Y, Gmax_Y, Bmax_Y), imgGrayScale_Y);
+			//cvSmooth(imgGrayScale_Y, imgGrayScale_Y, CV_GAUSSIAN, 9, 9);
+			cvResize(imgGrayScale_Y, imgGrayScale_Ys);
+			if (key == 0)
+				cvShowImage("Yellow_thresh", imgGrayScale_Ys);
+
+			if (key == 0)
+			{
+				char charCheckForEscKey = cvWaitKey(10);
+				if (charCheckForEscKey == 'c')
+				{
+
+#pragma region Closing Calibration
+
+					cvDestroyWindow("RedT");
+					cvDestroyWindow("Red_thresh");
+					cvDestroyWindow("Blue");
+					cvDestroyWindow("Blue_thresh");
+					cvDestroyWindow("Black");
+					cvDestroyWindow("Black_thresh");
+					cvDestroyWindow("WhiteT");
+					cvDestroyWindow("White_thresh");
+					cvDestroyWindow("Yellow");
+					cvDestroyWindow("Yellow_thresh");
+					cvDestroyWindow("Left");
+					cvDestroyWindow("Left_thresh");
+					cvDestroyWindow("Right");
+					cvDestroyWindow("Right_thresh");
+
+
+#pragma endregion
+
+					break;
+				}
+			}
+			else if (key == 1)
+				break;
+		}
+
+#pragma endregion
+
+#pragma endregion
+
+
+#pragma region Contour Tracking
+
+#pragma region Red contours
+
+
+		//finding all contours in the image
+
+		cvFindContours(imgGrayScale_R, storage_R, &contours_R, sizeof(CvContour), CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, cvPoint(0, 0));
+
+		//iterating through each contour
+		while (contours_R)
+		{
+			//obtain a sequence of points of contour, pointed by the variable 'contour'
+			result = cvApproxPoly(contours_R, sizeof(CvContour), storage_R, CV_POLY_APPROX_DP, cvContourPerimeter(contours_R)*0.02, 0);
+
+#pragma region Quadrilateral
+			if (result->total == 4 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > Area_R)
+			{
+				//iterating through each point
+				CvPoint *pt[4];
+				for (int i = 0; i < 4; i++){
+					pt[i] = (CvPoint*)cvGetSeqElem(result, i);
+				}
+
+#pragma region drawing
+				cvLine(img, *pt[0], *pt[1], cvScalar(0, 0, 255), 4);
+				cvLine(img, *pt[1], *pt[2], cvScalar(0, 0, 255), 4);
+				cvLine(img, *pt[2], *pt[3], cvScalar(0, 0, 255), 4);
+				cvLine(img, *pt[3], *pt[0], cvScalar(0, 0, 255), 4);
+#pragma endregion //drawing lines around the quadrilateral
+
+
+				pos[p].x = (pt[0]->x + pt[1]->x + pt[2]->x + pt[3]->x) / 4;
+				pos[p].y = (pt[0]->y + pt[1]->y + pt[2]->y + pt[3]->y) / 4;
+				pos[p].shape = 1;
+
+
+				CvRect obj = cvBoundingRect(result);
+				pos[p].height = obj.height;
+				pos[p].width = obj.width;
+				p++;
+				cvPutText(img, "Red Square", cvPoint(obj.x, obj.y + obj.height / 2), font, cvScalar(0, 0, 0));
+
+			}
+#pragma endregion //if there are 4 vertices in the contour(It should be a quadrilateral)
+
+			//obtain the next contour
+			contours_R = contours_R->h_next;
+		}
+
+#pragma endregion    //Squares
+
+#pragma region Blue contours
+
+
+		cvFindContours(imgGrayScale_B, storage_B, &contours_B, sizeof(CvContour), CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, cvPoint(0, 0));
+
+		while (contours_B)
+		{
+			//obtain a sequence of points of contour, pointed by the variable 'contour'
+			result = cvApproxPoly(contours_B, sizeof(CvContour), storage_B, CV_POLY_APPROX_DP, cvContourPerimeter(contours_B)*0.02, 0);
+
+
+#pragma region Quadrilateral
+			if (result->total == 4 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > Area_B)
+			{
+				//iterating through each point
+				CvPoint *pt[4];
+				for (int i = 0; i < 4; i++){
+					pt[i] = (CvPoint*)cvGetSeqElem(result, i);
+				}
+
+				//drawing lines around the quadrilateral
+
+#pragma region drawing
+				cvLine(img, *pt[0], *pt[1], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[1], *pt[2], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[2], *pt[3], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[3], *pt[0], cvScalar(255, 0, 0), 4);
+
+#pragma endregion
+
+				pos[p].x = (pt[0]->x + pt[1]->x + pt[2]->x + pt[3]->x) / 4;
+				pos[p].y = (pt[0]->y + pt[1]->y + pt[2]->y + pt[3]->y) / 4;
+				pos[p].shape = 2;
+#pragma endregion 	//if there are 4 vertices in the contour(It should be a quadrilateral)
+
+
+				CvRect obj = cvBoundingRect(result);
+				pos[p].height = obj.height;
+				pos[p].width = obj.width;
+				p++;
+				cvPutText(img, "Blue Square", cvPoint(obj.x, obj.y + obj.height / 2), font, cvScalar(0, 0, 0));
+
+
+			}
+
+			//obtain the next contour
+			contours_B = contours_B->h_next;
+		}
+
+#pragma endregion	//Squares
+
+#pragma region White contours
+
+
+		//finding all contours in the image
+		cvFindContours(imgGrayScale_W, storage_W, &contours_W, sizeof(CvContour), CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, cvPoint(0, 0));
+
+		//iterating through each contour
+		while (contours_W)
+		{
+			//obtain a sequence of points of contour, pointed by the variable 'contour'
+			result = cvApproxPoly(contours_W, sizeof(CvContour), storage_W, CV_POLY_APPROX_DP, cvContourPerimeter(contours_W)*0.02, 0);
+
+			//if there are 4 vertices in the contour(It should be a quadrilateral)
+#pragma region Quadrilateral
+
+			if (result->total == 4 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > Area_W)
+			{
+				//iterating through each point
+				CvPoint *pt[4];
+				for (int i = 0; i < 4; i++){
+					pt[i] = (CvPoint*)cvGetSeqElem(result, i);
+				}
+
+#pragma region drawing
+				//drawing lines around the quadrilateral
+				cvLine(img, *pt[0], *pt[1], cvScalar(0, 0, 255), 4);
+				cvLine(img, *pt[1], *pt[2], cvScalar(0, 0, 255), 4);
+				cvLine(img, *pt[2], *pt[3], cvScalar(0, 0, 255), 4);
+				cvLine(img, *pt[3], *pt[0], cvScalar(0, 0, 255), 4);
+#pragma endregion
+
+				pos[p].x = (pt[0]->x + pt[1]->x + pt[2]->x + pt[3]->x) / 4;
+				pos[p].y = (pt[0]->y + pt[1]->y + pt[2]->y + pt[3]->y) / 4;
+				pos[p].shape = 3;
+
+
+				CvRect obj = cvBoundingRect(result);
+				pos[p].height = obj.height;
+				pos[p].width = obj.width;
+				p++;
+				cvPutText(img, "White Square", cvPoint(obj.x, obj.y + obj.height / 2), font, cvScalar(0, 0, 0));
+
+			}
+
+#pragma endregion
+
+			//obtain the next contour
+			contours_W = contours_W->h_next;
+		}
+#pragma endregion  //Squares
+
+#pragma region Black contours  
+
+		cvFindContours(imgGrayScale_BL, storage_BL, &contours_BL, sizeof(CvContour), CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, cvPoint(0, 0));
+
+		while (contours_BL)
+		{
+			//obtain a sequence of points of contour, pointed by the variable 'contour'
+			result = cvApproxPoly(contours_BL, sizeof(CvContour), storage_BL, CV_POLY_APPROX_DP, cvContourPerimeter(contours_BL)*0.02, 0);
+
+#pragma region Triangle
+			//if there are 3  vertices  in the contour(It should be a triangle)
+			if (result->total == 3 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > Area_BL)
+			{
+				//iterating through each point
+				CvPoint *pt[3];
+				for (int i = 0; i < 3; i++){
+					pt[i] = (CvPoint*)cvGetSeqElem(result, i);
+				}
+
+
+				//drawing lines around the triangle
+
+#pragma region drawing
+
+				cvLine(img, *pt[0], *pt[1], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[1], *pt[2], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[2], *pt[0], cvScalar(255, 0, 0), 4);
+#pragma endregion
+
+				pos[p].x = (pt[0]->x + pt[1]->x + pt[2]->x) / 3;
+				pos[p].y = (pt[0]->y + pt[1]->y + pt[2]->y) / 3;
+
+				int d[6];
+
+				d[0] = abs(pt[0]->x - pos[p].x);
+				d[1] = abs(pt[1]->x - pos[p].x);
+				d[2] = abs(pt[2]->x - pos[p].x);
+				d[3] = abs(pt[0]->y - pos[p].y);
+				d[4] = abs(pt[1]->y - pos[p].y);
+				d[5] = abs(pt[2]->y - pos[p].y);
+
+
+				int min = d[0];
+				int j = 0;
+				for (int i = 0; i < 6; i++)
+				{
+					if (d[i] < min)
+					{
+						min = d[i];
+						j = i;
+					}
+				}
+
+				if (j < 3)
+				{
+					if (pt[j]->y - pos[j].y > 0)
+						pos[p].shape = 8;
+					else
+						pos[p].shape = 6;
+				}
+
+				else
+				{
+					if (pt[j - 3]->x - pos[p].x > 0)
+						pos[p].shape = 7;
+					else
+						pos[p].shape = 9;
+				}
+
+
+				CvRect obj = cvBoundingRect(result);
+				pos[p].height = obj.height;
+				pos[p].width = obj.width;
+				p++;
+				cvPutText(img, "Black Triangle", cvPoint(obj.x, obj.y + obj.height / 2), font, cvScalar(0, 0, 0));
+
+
+			}
+
+#pragma region Quadrilateral
+
+			//if there are 4 vertices in the contour(It should be a quadrilateral)
+			else if (result->total == 4 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > Area_BL)
+			{
+				//iterating through each point
+				CvPoint *pt[4];
+				for (int i = 0; i < 4; i++){
+					pt[i] = (CvPoint*)cvGetSeqElem(result, i);
+				}
+
+
+#pragma region drawing
+				//drawing lines around the quadrilateral
+
+				cvLine(img, *pt[0], *pt[1], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[1], *pt[2], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[2], *pt[3], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[3], *pt[0], cvScalar(255, 0, 0), 4);
+
+#pragma endregion
+
+				pos[p].x = (pt[0]->x + pt[1]->x + pt[2]->x + pt[3]->x) / 4;
+				pos[p].y = (pt[0]->y + pt[1]->y + pt[2]->y + pt[3]->y) / 4;
+				pos[p].shape = 4;
+
+
+
+				CvRect obj = cvBoundingRect(result);
+				pos[p].height = obj.height;
+				pos[p].width = obj.width;
+				p++;
+				cvPutText(img, "Black Square", cvPoint(obj.x, obj.y + obj.height / 2), font, cvScalar(0, 0, 0));
+
+
+			}
+#pragma endregion
+
+
+#pragma endregion
+
+
+#pragma region Plus
+
+			//if there are 12 vertices  in the contour(It should be a plus sign)
+			else if (result->total == 12 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > Area_BL)
+			{
+				//iterating through each point
+				CvPoint *pt[12];
+				for (int i = 0; i < 12; i++){
+					pt[i] = (CvPoint*)cvGetSeqElem(result, i);
+				}
+
+#pragma region drawing
+				//drawing lines around the plus
+				cvLine(img, *pt[0], *pt[1], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[1], *pt[2], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[2], *pt[3], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[3], *pt[4], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[4], *pt[5], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[5], *pt[6], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[6], *pt[7], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[7], *pt[8], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[8], *pt[9], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[9], *pt[10], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[10], *pt[11], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[11], *pt[0], cvScalar(255, 0, 0), 4);
+#pragma endregion
+
+				pos[p].x = (pt[0]->x + pt[1]->x + pt[2]->x + pt[3]->x + pt[4]->x + pt[5]->x + pt[6]->x + pt[7]->x + pt[8]->x + pt[9]->x + pt[10]->x + pt[11]->x) / 12;
+				pos[p].y = (pt[0]->y + pt[1]->y + pt[2]->y + pt[3]->y + pt[4]->y + pt[5]->y + pt[6]->y + pt[7]->y + pt[8]->y + pt[9]->y + pt[10]->y + pt[11]->y) / 12;
+				pos[p].shape = 5;
+
+
+				CvRect obj = cvBoundingRect(result);
+				pos[p].height = obj.height;
+				pos[p].width = obj.width;
+				p++;
+				cvPutText(img, "Black Plus", cvPoint(obj.x, obj.y + obj.height / 2), font, cvScalar(0, 0, 0));
+
+			}
+#pragma endregion
+
+			//obtain the next contour
+			contours_BL = contours_BL->h_next;
+		}
+
+		//yellow contour
+
+		cvFindContours(imgGrayScale_Y, storage_Y, &contours_Y, sizeof(CvContour), CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, cvPoint(0, 0));
+
+		while (contours_Y)
+		{
+			//obtain a sequence of points of contour, pointed by the variable 'contour'
+			result = cvApproxPoly(contours_Y, sizeof(CvContour), storage_Y, CV_POLY_APPROX_DP, cvContourPerimeter(contours_Y)*0.02, 0);
+
+			if (result->total == 4 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > Area_Y)
+			{
+				//iterating through each point
+				CvPoint *pt[4];
+				for (int i = 0; i < 4; i++){
+					pt[i] = (CvPoint*)cvGetSeqElem(result, i);
+				}
+
+
+#pragma region drawing
+				//drawing lines around the quadrilateral
+
+				cvLine(img, *pt[0], *pt[1], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[1], *pt[2], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[2], *pt[3], cvScalar(255, 0, 0), 4);
+				cvLine(img, *pt[3], *pt[0], cvScalar(255, 0, 0), 4);
+
+#pragma endregion
+
+				pos[p].x = (pt[0]->x + pt[1]->x + pt[2]->x + pt[3]->x) / 4;
+				pos[p].y = (pt[0]->y + pt[1]->y + pt[2]->y + pt[3]->y) / 4;
+				pos[p].shape = 11;
+
+
+				CvRect obj = cvBoundingRect(result);
+				pos[p].height = obj.height;
+				pos[p].width = obj.width;
+				p++;
+				cvPutText(img, "Yellow Square", cvPoint(obj.x, obj.y + obj.height / 2), font, cvScalar(0, 0, 0));
+
+
+			}
+
+			contours_Y = contours_Y->h_next;
+		}
+
+		// Starting Point
+
+		cvFindContours(imgGrayScale_LE, storage_LE, &contours_LE, sizeof(CvContour), CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, cvPoint(0, 0));
+		cvFindContours(imgGrayScale_RI, storage_RI, &contours_RI, sizeof(CvContour), CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, cvPoint(0, 0));
+		int x1, y1;
+		while (contours_LE)
+		{
+
+			//obtain a sequence of points of contour, pointed by the variable 'contour'
+			result = cvApproxPoly(contours_LE, sizeof(CvContour), storage_LE, CV_POLY_APPROX_DP, cvContourPerimeter(contours_LE)*0.02, 0);
+
+			if (result->total >= 3 && result->total <= 12 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > Area_LE)
+			{
+				printf("found   L......%d\n", result->total);
+				//iterating through each point
+
+
+#pragma endregion
+
+
+
+				CvRect obj = cvBoundingRect(result);
+
+				cvPutText(img, "Left Square", cvPoint(obj.x, obj.y + obj.height / 2), font, cvScalar(0, 0, 0));
+
+				x1 = obj.x + (obj.width / 2);
+				y1 = obj.y + (obj.height / 2);
+			}
+
+			//obtain a sequence of points of contour, pointed by the variable 'contour'
+
+
+			contours_LE = contours_LE->h_next;
+		}
+
+
+
+#pragma endregion  //Triangle,Square,Plus
+		while (contours_RI)
+		{
+			result = cvApproxPoly(contours_RI, sizeof(CvContour), storage_RI, CV_POLY_APPROX_DP, cvContourPerimeter(contours_RI)*0.02, 0);
+
+			if (result->total >= 3 && result->total <= 12 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > Area_RI)
+			{
+				//iterating through each point
+				printf("found..,  %d\n", result->total);
+
+#pragma endregion
+
+
+
+				CvRect obj = cvBoundingRect(result);
+				cvPutText(img, "Right Square", cvPoint(obj.x, obj.y + obj.height / 2), font, cvScalar(0, 0, 0));
+
+				int x2 = obj.x + (obj.width / 2);
+				int y2 = obj.y + (obj.height / 2);
+				pos[p].x = (x1 + x2) / 2;
+				pos[p].y = (y1 + y2) / 2;
+				if (abs(y1 - y2) < abs(x1 - x2))
+				{
+					if (x2 > x1)
+						dir = 1;
+					else
+						dir = 3;
+				}
+				if (abs(y1 - y2) > abs(x1 - x2))
+				{
+					if (y2 < y1)
+						dir = 4;
+					else
+						dir = 2;
+				}
+				pos[p].shape = 10;
+				pos[p].height = obj.height;
+				pos[p].width = obj.width;
+				p++;
+			}
+			contours_RI = contours_RI->h_next;
+		}
+		//show the image in which identified shapes are marked   
+		if (key == 0)
+		{
+			cvShowImage("Tracked", img);
+			cvShowImage("Tracked1", img_orig);
+		}
+
+
+		for (int i = 0; i < p; i++)
+		{
+			printf("%d\t%d\t%d\n", pos[i].x, pos[i].y, pos[i].shape);
+		}
+		printf("\n---> %d\n", p);
+
+#pragma endregion
+
+
+
+		recalib = 'y';
+		if (key == 0)
+		{
+			cvNamedWindow("n = recalib");
+			//recalib = getchar(); //press n to recalib
+			recalib = cvWaitKey(15000);
+		}
+	}
+	if (key == 0)
+		cvDestroyWindow("n = recalib");
+#pragma region sorting Y
+	int k, l, i = 6, j = 4;
+
+
+
+	for (k = 0; k < p; k++)
+	{
+		for (l = k + 1; l < p; l++)
+		{
+			if (pos[k].y > pos[l].y)
+			{
+				temp = pos[k];
+				pos[k] = pos[l];
+				pos[l] = temp;
+			}
+		}
+
+	}
+
+	int h = 0, cc = 1;
+
+	pos[0].row = 0;
+	for (k = 1; k < p; k++)
+	{
+		if ((pos[k].y - pos[k - 1].y) > min_y_dist)
+		{
+			r++;
+		}
+		pos[k].row = r;
+	}
+
+#pragma endregion
+
+#pragma region sorting X
+
+	for (k = 0; k < p; k++)
+	{
+		for (l = k + 1; l < p; l++)
+		{
+			if (pos[k].x > pos[l].x)
+			{
+				temp = pos[k];
+				pos[k] = pos[l];
+				pos[l] = temp;
+			}
+		}
+
+	}
+
+	for (k = 1; k < p; k++)
+	{
+		if ((pos[k].x - pos[k - 1].x) > min_x_dist)
+		{
+			c++;
+		}
+		pos[k].col = c;
+	}
+
+#pragma endregion
+
+	/*int size = sizeof(struct post)*c;
+	struct post acp;
+
+	struct post *pointer = &acp;
+	struct post **sfinal = &pointer;
+	for (k = 0; k < r; k++)
+	(sfinal + k) = (struct post*)malloc(size);
+
+	post **sfinal;
+	sfinal = (post **)malloc(sizeof(post *)*(r+1));
+	for (i = 0; i <= c; i++)
+	sfinal[i] = (post *)malloc(sizeof(post) * (c+1));*/
+
+#pragma region Populating sfinal
+	int q, w;
+	for (k = 0; k < p; k++)
+	{
+		q = pos[k].row;
+		w = pos[k].col;
+		sfinal[q][w] = pos[k];
+	}
+#pragma endregion
+
+#pragma region Printing sfinal
+	for (k = 0; k <= r; k++)
+	{
+		for (l = 0; l <= c; l++)
+		{
+			printf("%d\t", sfinal[k][l].shape);
+		}
+		printf("\n");
+	}
+#pragma endregion
+
+
+#pragma region Finding Start
+
+	for (pr = 0; pr <= r; pr++)
+	{
+		for (pc = 0; pc <= c; pc++)
+		{
+			if (sfinal[pr][pc].shape == 10 && !start)
+			{
+				//prex = sfinal[pr][pc].x;
+				//prey = sfinal[pr][pc].y;
+				front++;
+				pathq[front] = pr * 10 + pc;
+				front++;
+				if (dir == 1)
+				{
+					nr = pr - 1;
+					nc = pc;
+				}
+				if (dir == 2)
+				{
+					nr = pr;
+					nc = pc + 1;
+				}
+				if (dir == 3)
+				{
+					nr = pr + 1;
+					nc = pc;
+				}
+				if (dir == 4)
+				{
+					nr = pr;
+					nc = pc - 1;
+				}
+
+				pathq[front] = nr * 10 + nc;
+				start = true;
+				break;
+			}
+		}
+		if (start)
+			break;
+	}
+
+
+#pragma region Finding path
+
+	while (f == 0)
+	{
+		switch (sfinal[nr][nc].shape)
+		{
+		case 1: redsquare();
+			break;
+		case 2: bluesquare();
+			break;
+		case 3: whitesquare();
+			break;
+		case 4: blacksquare();
+			break;
+		case 5: blackplus();
+			break;
+		case 6: triangleup();
+			break;
+		case 7: triangleright();
+			break;
+		case 8: triangledown();
+			break;
+		case 9: triangleleft();
+			break;
+		case 10:beg();
+			break;
+		case 11:stop();
+			break;
+		default: retreat();
+			break;
+		}
+	}
+
+#pragma region Removing repetition
+	//shifting all back if 2 repeated
+	for (int i = 1; i <= front; i++)
+	{
+		if (pathq[i] == pathq[i - 1])
+		{
+			for (int j = i; j <= front; j++)
+			{
+				pathq[j] = pathq[j + 1];
+			}
+			front--;
+		}
+	}
+#pragma endregion
+
+
+
+
+#pragma endregion
+
+
+#pragma region Printing queue
+	for (int i = 0; i <= front; i++)
+	{
+		printf("%d\n", pathq[i]);
+	}
+
+	if (key == 0)
+		getchar();
+	tracking();
+
+	cvWaitKey(0); //wait for a key press
+	return 0;
+#pragma endregion
+
+}
+
+/*void setbot()
+{
+int lx = 0, ly = 0, rx = 0, ry = 0;
+CvSize size640x480 = cvSize(640, 480);     //use a 640 x 480 image for all windows
+
+CvCapture* p_capWebcam;     //it is to assign the web cam stream
+
+IplImage* p_imgOriginal;   //origingl web cam image
+IplImage* p_imgProcessed;
+p_capWebcam = cvCaptureFromCAM(1);    // 0 for 1st cam
+
+cvSetCaptureProperty(p_capWebcam, CV_CAP_PROP_FRAME_WIDTH, 640);
+cvSetCaptureProperty(p_capWebcam, CV_CAP_PROP_FRAME_HEIGHT, 480);
+
+
+if (p_capWebcam == NULL) {
+printf("error : image not captured \n");
+getchar();
+exit(0);
+}
+
+cvNamedWindow("Original", CV_WINDOW_AUTOSIZE);
+
+p_imgOriginal = cvQueryFrame(p_capWebcam);
+
+p_imgProcessed = cvCreateImage(size640x480, IPL_DEPTH_8U, 1);
+IplImage* imgGrayScale_G = cvCreateImage(cvGetSize(p_imgOriginal), 8, 1);
+int percen = 40;
+IplImage* imgGrayScale_Gs = cvCreateImage(cvSize((int)((p_imgOriginal->width*percen) / 100), (int)((p_imgOriginal->height*percen) / 100)), 8, 1);
+
+IplImage* imgGrayScale_R = cvCreateImage(cvGetSize(p_imgOriginal), 8, 1);
+IplImage* imgGrayScale_Rs = cvCreateImage(cvSize((int)((p_imgOriginal->width*percen) / 100), (int)((p_imgOriginal->height*percen) / 100)), 8, 1);
+
+cvNamedWindow("Green_T");
+cvNamedWindow("GreenN");
+
+cvNamedWindow("Red_T");
+cvNamedWindow("RedN");
+
+cvCreateTrackbar("R min", "GreenN", &Rmin_G, 255);
+cvCreateTrackbar("G min", "GreenN", &Gmin_G, 255);
+cvCreateTrackbar("B min", "GreenN", &Bmin_G, 255);
+cvCreateTrackbar("R max", "GreenN", &Rmax_G, 255);
+cvCreateTrackbar("G max", "GreenN", &Gmax_G, 255);
+cvCreateTrackbar("B max", "GreenN", &Bmax_G, 255);
+cvCreateTrackbar("Area ", "GreenN", &Area_G, 2000);
+
+cvCreateTrackbar("R min", "RedN", &Rmin_RA, 255);
+cvCreateTrackbar("G min", "RedN", &Gmin_RA, 255);
+cvCreateTrackbar("B min", "RedN", &Bmin_RA, 255);
+cvCreateTrackbar("R max", "RedN", &Rmax_RA, 255);
+cvCreateTrackbar("G max", "RedN", &Gmax_RA, 255);
+cvCreateTrackbar("B max", "RedN", &Bmax_RA, 255);
+cvCreateTrackbar("Area ", "RedN", &Area_RA, 2000);
+
+
+CvSeq *contours_G, *contours_R;  //hold the pointer to a contour in the memory block
+CvSeq* result;
+CvSeq* resultr;   //hold sequence of points of a contour
+CvMemStorage *storage_G = cvCreateMemStorage(0); //storage area for all contours
+CvMemStorage *storage_R = cvCreateMemStorage(0);
+
+while (1)
+{
+
+p_imgOriginal = cvQueryFrame(p_capWebcam);
+if (p_imgOriginal == NULL) {
+printf("error : frame not found \n");
+getchar();
+break;
+}
+cvShowImage("Original", p_imgOriginal);
+cvInRangeS(p_imgOriginal, CV_RGB(Rmin_G, Gmin_G, Bmin_G), CV_RGB(Rmax_G, Gmax_G, Bmax_G), imgGrayScale_G);
+cvSmooth(imgGrayScale_G, imgGrayScale_G, CV_GAUSSIAN, 9, 9);
+cvResize(imgGrayScale_G, imgGrayScale_Gs);
+
+cvInRangeS(p_imgOriginal, CV_RGB(Rmin_RA, Gmin_RA, Bmin_RA), CV_RGB(Rmax_RA, Gmax_RA, Bmax_RA), imgGrayScale_R);
+cvSmooth(imgGrayScale_R, imgGrayScale_R, CV_GAUSSIAN, 9, 9);
+cvResize(imgGrayScale_R, imgGrayScale_Rs);
+
+
+cvShowImage("Green_T", imgGrayScale_Gs);
+cvShowImage("Red_T", imgGrayScale_Rs);
+
+char charCheckForEscKey = cvWaitKey(10);
+
+if (charCheckForEscKey == 'c')
+{
+cvDestroyWindow("GreenN");
+cvDestroyWindow("RedN");
+break;
+}
+}
+
+
+
+}*/
+
+
+CvSize size640x480 = cvSize(640, 480);     //use a 640 x 480 image for all windows
+
+CvCapture* p_capWebcam;     //it is to assign the web cam stream
+
+IplImage* p_imgOriginal;   //original web cam image
+IplImage* p_imgProcessed;
+IplImage* imgGrayScale_RIt;
+IplImage* imgGrayScale_LEt;
+CvSeq *contours_RIt, *contours_LEt;
+CvSeq* result;
+CvSeq* resultr;   //hold sequence of points of a contour
+CvMemStorage  *storage_RI;
+CvMemStorage  *storage_LE;//storage area for all contours
+bool init = false;
+int seconds;
+
+void tracking()
+{
+	char nam = 'k';
+	int prx = 0, pry = 0, ply = 0, plx = 0;
+	rightb = 8;
+	leftb = 8;
+
+	SerialPort sp;
+
+	sp.PortName = "COM14";
+	sp.BaudRate = 9600;
+	sp.Open();
+	//CvSize size640x480 = cvSize(640, 480);     //use a 640 x 480 image for all windows
+
+	//CvCapture* p_capWebcam;     //it is to assign the web cam stream
+
+	//IplImage* p_imgOriginal;   //origingl web cam image
+	//IplImage* p_imgProcessed;
+	p_capWebcam = cvCaptureFromCAM(cam_port);    // 0 for 1st cam
+
+	cvSetCaptureProperty(p_capWebcam, CV_CAP_PROP_FRAME_WIDTH, 640);
+	cvSetCaptureProperty(p_capWebcam, CV_CAP_PROP_FRAME_HEIGHT, 480);
+
+
+	if (p_capWebcam == NULL) {
+		printf("error : image not captured \n");
+		getchar();
+		exit(0);
+	}
+
+	cvNamedWindow("Original", CV_WINDOW_AUTOSIZE);
+
+	p_imgOriginal = cvQueryFrame(p_capWebcam);
+
+	p_imgProcessed = cvCreateImage(size640x480, IPL_DEPTH_8U, 1);
+	IplImage* imgGrayScale_RIt = cvCreateImage(cvGetSize(p_imgOriginal), 8, 1);
+	int percen = 40;
+	IplImage* imgGrayScale_RIts = cvCreateImage(cvSize((int)((p_imgOriginal->width*percen) / 100), (int)((p_imgOriginal->height*percen) / 100)), 8, 1);
+
+	IplImage* imgGrayScale_LEt = cvCreateImage(cvGetSize(p_imgOriginal), 8, 1);
+	IplImage* imgGrayScale_LEts = cvCreateImage(cvSize((int)((p_imgOriginal->width*percen) / 100), (int)((p_imgOriginal->height*percen) / 100)), 8, 1);
+
+
+
+
+	//CvSeq *contours_G, *contours_R;  //hold the pointer to a contour in the memory block
+	//CvSeq* result;
+	//CvSeq* resultr;   //hold sequence of points of a contour
+	CvMemStorage *storage_RIt = cvCreateMemStorage(0); //storage area for all contours
+	CvMemStorage *storage_LEt = cvCreateMemStorage(0);
+
+	/*while (1)
+	{
+
+	p_imgOriginal = cvQueryFrame(p_capWebcam);
+	if (p_imgOriginal == NULL) {
+	printf("error : frame not found \n");
+	getchar();
+	break;
+	}
+	cvShowImage("Original", p_imgOriginal);
+	cvInRangeS(p_imgOriginal, CV_RGB(Rmin_RI, Gmin_RI, Bmin_RI), CV_RGB(Rmax_RI, Gmax_RI, Bmax_RI), imgGrayScale_RIt);
+	cvSmooth(imgGrayScale_RIt, imgGrayScale_RIt, CV_GAUSSIAN, 9, 9);
+	cvResize(imgGrayScale_RIt, imgGrayScale_RIts);
+
+	cvInRangeS(p_imgOriginal, CV_RGB(Rmin_LE, Gmin_LE, Bmin_LE), CV_RGB(Rmax_LE, Gmax_LE, Bmax_LE), imgGrayScale_LEt);
+	cvSmooth(imgGrayScale_LEt, imgGrayScale_LEt, CV_GAUSSIAN, 9, 9);
+	cvResize(imgGrayScale_LEt, imgGrayScale_LEts);
+
+
+	cvShowImage("Right_T", imgGrayScale_RIts);
+	cvShowImage("Left_T", imgGrayScale_LEts);
+
+	char charCheckForEscKey = cvWaitKey(10);
+
+	if (charCheckForEscKey == 'c')
+	{
+	cvDestroyWindow("RightN");
+	cvDestroyWindow("LeftN");
+	break;
+	}
+	}*/
+
+	while (1)
+	{
+		p_imgOriginal = cvQueryFrame(p_capWebcam);
+
+		/*if (p_imgOriginal == NULL) {
+		printf("error : frame not found \n");
+		getchar();
+		break;
+		}*/
+
+		cvInRangeS(p_imgOriginal, CV_RGB(Rmin_RI, Gmin_RI, Bmin_RI), CV_RGB(Rmax_RI, Gmax_RI, Bmax_RI), imgGrayScale_RIt);
+		cvSmooth(imgGrayScale_RIt, imgGrayScale_RIt, CV_GAUSSIAN, 9, 9);
+		cvResize(imgGrayScale_RIt, imgGrayScale_RIts);
+		cvFindContours(imgGrayScale_RIt, storage_RIt, &contours_RIt, sizeof(CvContour), CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, cvPoint(0, 0));
+
+		cvInRangeS(p_imgOriginal, CV_RGB(Rmin_LE, Gmin_LE, Bmin_LE), CV_RGB(Rmax_LE, Gmax_LE, Bmax_LE), imgGrayScale_LEt);
+		cvSmooth(imgGrayScale_LEt, imgGrayScale_LEt, CV_GAUSSIAN, 9, 9);
+		cvResize(imgGrayScale_LEt, imgGrayScale_LEts);
+		cvFindContours(imgGrayScale_LEt, storage_LEt, &contours_LEt, sizeof(CvContour), CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, cvPoint(0, 0));
+
+		//iterating through each contour
+		while (contours_RIt)
+		{
+			//obtain a sequence of points of contour, pointed by the variable 'contour'
+			result = cvApproxPoly(contours_RIt, sizeof(CvContour), storage_RIt, CV_POLY_APPROX_DP, cvContourPerimeter(contours_RIt)*0.02, 0);
+
+			if (result->total >= 1 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > Area_RI)
+			{
+				//iterating through each point
+
+				CvRect obj = cvBoundingRect(result);
+				rx = obj.x + (obj.width / 2);
+				ry = obj.y + (obj.height / 2);
+			}
+			contours_RIt = contours_RIt->h_next;
+		}
+		while (contours_LEt)
+		{
+			//obtain a sequence of points of contour, pointed by the variable 'contour'
+			resultr = cvApproxPoly(contours_LEt, sizeof(CvContour), storage_LEt, CV_POLY_APPROX_DP, cvContourPerimeter(contours_LEt)*0.02, 0);
+
+			if (resultr->total >= 1 && fabs(cvContourArea(resultr, CV_WHOLE_SEQ)) > Area_LE)
+			{
+				//iterating through each point
+				CvRect obj1 = cvBoundingRect(resultr);
+				lx = obj1.x + (obj1.width / 2);
+				ly = obj1.y + (obj1.height / 2);
+				orien = 0;
+				pathline();
+				//////////////////////////////////////////////////////////////////////////////////////
+				if (orien == 1)
+				{
+					//if (abs(prx - rx) >= 1 || abs(pry - ry) >= 1 || abs(plx - lx) >= 1 || abs(ply - ly) >= 1)
+					//{
+					sp.Write("$oc#");
+					printf("$oc#\n");
+					Sleep(70);
+					//}
+				}
+				else if (orien == 2)
+				{
+					//if (abs(prx - rx) >= 1 || abs(pry - ry) >= 1 || abs(plx - lx) >= 1 || abs(ply - ly) >= 1)
+					//{
+					sp.Write("$oa#");
+					printf("$oa#\n");
+					Sleep(70);
+					//}
+				}
+				else if (orien == 0)
+				{
+					// NO act
+					if (act == 0)
+					{
+						if (leftb == 8)
+						{
+							if (rightb == 1)
+							{
+								sp.Write("$r1l8o0@0#");
+								printf("$r1l8o0@0#\n");
+							}
+							else if (rightb == 2)
+							{
+								sp.Write("$r2l8o0@0#");
+								printf("$r2l8o0@0#\n");
+							}
+							else if (rightb == 3)
+							{
+								sp.Write("$r3l8o0@0#");
+								printf("$r3l8o0@0#\n");
+							}
+							else if (rightb == 4)
+							{
+								sp.Write("$r4l8o0@0#");
+								printf("$r4l8o0@0#\n");
+							}
+							else if (rightb == 5)
+							{
+								sp.Write("$r5l8o0@0#");
+								printf("$r5l8o0@0#\n");
+							}
+							else if (rightb == 6)
+							{
+								sp.Write("$r6l8o0@0#");
+								printf("$r6l8o0@0#\n");
+							}
+							else if (rightb == 7)
+							{
+								sp.Write("$r7l8o0@0#");
+								printf("$r7l8o0@0#\n");
+							}
+							else if (rightb == 8)
+							{
+								sp.Write("$r8l8o0@0#");
+								printf("$r8l8o0@0#\n");
+							}
+						}
+						//rightb
+						else if (rightb == 8)
+						{
+							if (leftb == 1)
+							{
+								sp.Write("$r8l1o0@0#");
+								printf("$r8l1o0@0#\n");
+							}
+							else if (leftb == 2)
+							{
+								sp.Write("$r8l2o0@0#");
+								printf("$r8l2o0@0#\n");
+							}
+							else if (leftb == 3)
+							{
+								sp.Write("$r8l3o0@0#");
+								printf("$r8l3o0@0#\n");
+							}
+							else if (leftb == 4)
+							{
+								sp.Write("$r8l4o0@0#");
+								printf("$r8l4o0@0#\n");
+							}
+							else if (leftb == 5)
+							{
+								sp.Write("$r8l5o0@0#");
+								printf("$r8l5o0@0#\n");
+							}
+							else if (leftb == 6)
+							{
+								sp.Write("$r8l6o0@0#");
+								printf("$r8l6o0@0#\n");
+							}
+							else if (leftb == 7)
+							{
+								sp.Write("$r8l7o0@0#");
+								printf("$r8l7o0@0#\n");
+							}
+							else if (leftb == 8)
+							{
+								sp.Write("$r8l8o0@0#");
+								printf("$r8l8o0@0#\n");
+							}
+						}
+					}
+
+					// act == 1
+					if (act == 1)
+					{
+						if (leftb == 8)
+						{
+							if (rightb == 1)
+							{
+								sp.Write("$r1l8o0@1#");
+								printf("$r1l8o0@1#\n");
+							}
+							else if (rightb == 2)
+							{
+								sp.Write("$r2l8o0@1#");
+								printf("$r2l8o0@1#\n");
+							}
+							else if (rightb == 3)
+							{
+								sp.Write("$r3l8o0@1#");
+								printf("$r3l8o0@1#\n");
+							}
+							else if (rightb == 4)
+							{
+								sp.Write("$r4l8o0@1#");
+								printf("$r4l8o0@1#\n");
+							}
+							else if (rightb == 5)
+							{
+								sp.Write("$r5l8o0@1#");
+								printf("$r5l8o0@1#\n");
+							}
+							else if (rightb == 6)
+							{
+								sp.Write("$r6l8o0@1#");
+								printf("$r6l8o0@1#\n");
+							}
+							else if (rightb == 7)
+							{
+								sp.Write("$r7l8o0@1#");
+								printf("$r7l8o0@1#\n");
+							}
+							else if (rightb == 8)
+							{
+								sp.Write("$r8l8o0@1#");
+								printf("$r8l8o0@1#\n");
+							}
+						}
+
+						//rightb
+						if (rightb == 8)
+						{
+							if (leftb == 1)
+							{
+								sp.Write("$r8l1o0@1#");
+								printf("$r8l1o0@1#\n");
+							}
+							else if (leftb == 2)
+							{
+								sp.Write("$r8l2o0@1#");
+								printf("$r8l2o0@1#\n");
+							}
+							else if (leftb == 3)
+							{
+								sp.Write("$r8l3o0@1#");
+								printf("$r8l3o0@1#\n");
+							}
+							else if (leftb == 4)
+							{
+								sp.Write("$r8l4o0@1#");
+								printf("$r8l4o0@1#\n");
+							}
+							else if (leftb == 5)
+							{
+								sp.Write("$r8l5o0@1#");
+								printf("$r8l5o0@1#\n");
+							}
+							else if (leftb == 6)
+							{
+								sp.Write("$r8l6o0@1#");
+								printf("$r8l6o0@1#\n");
+							}
+							else if (leftb == 7)
+							{
+								sp.Write("$r8l7o0@1#");
+								printf("$r8l7o0@1#\n");
+							}
+							else if (leftb == 8)
+							{
+								sp.Write("$r8l8o0@1#");
+								printf("$r8l8o0@1#\n");
+							}
+						}
+					}
+
+					//act == 2
+					if (act == 2)
+					{
+						if (leftb == 8)
+						{
+							if (rightb == 1)
+							{
+								sp.Write("$r1l8o0@2#");
+								printf("$r1l8o0@2#\n");
+							}
+							else if (rightb == 2)
+							{
+								sp.Write("$r2l8o0@2#");
+								printf("$r2l8o0@2#\n");
+							}
+							else if (rightb == 3)
+							{
+								sp.Write("$r3l8o0@2#");
+								printf("$r3l8o0@2#\n");
+							}
+							else if (rightb == 4)
+							{
+								sp.Write("$r4l8o0@2#");
+								printf("$r4l8o0@2#\n");
+							}
+							else if (rightb == 5)
+							{
+								sp.Write("$r5l8o0@2#");
+								printf("$r5l8o0@2#\n");
+							}
+							else if (rightb == 6)
+							{
+								sp.Write("$r6l8o0@2#");
+								printf("$r6l8o0@2#");
+							}
+							else if (rightb == 7)
+							{
+								sp.Write("$r7l8o0@2#");
+								printf("$r7l8o0@2#\n");
+							}
+							else if (rightb == 8)
+							{
+								sp.Write("$r8l8o0@2#");
+								printf("$r8l8o0@2#\n");
+							}
+						}
+
+						//rightb
+						else if (rightb == 8)
+						{
+							if (leftb == 1)
+							{
+								sp.Write("$r8l1o0@2#");
+								printf("$r8l1o0@2#\n");
+							}
+							else if (leftb == 2)
+							{
+								sp.Write("$r8l2o0@2#");
+								printf("$r8l2o0@2#\n");
+							}
+							else if (leftb == 3)
+							{
+								sp.Write("$r8l3o0@2#");
+								printf("$r8l3o0@2#\n");
+							}
+							else if (leftb == 4)
+							{
+								sp.Write("$r8l4o0@2#");
+								printf("$r8l4o0@2#\n");
+							}
+							else if (leftb == 5)
+							{
+								sp.Write("$r8l5o0@2#");
+								printf("$r8l5o0@2#\n");
+							}
+							else if (leftb == 6)
+							{
+								sp.Write("$r8l6o0@2#");
+								printf("$r8l6o0@2#\n");
+							}
+							else if (leftb == 7)
+							{
+								sp.Write("$r8l7o0@2#");
+								printf("$r8l7o0@2#\n");
+							}
+							else if (leftb == 8)
+							{
+								sp.Write("$r8l8o0@2#");
+								printf("$r8l8o0@2#\n");
+							}
+						}
+					}
+
+				}
+
+
+				
+				prx = rx;
+				pry = ry;
+				plx = lx;
+				ply = ly;
+				///////////////////////////////////////////////////////////////////
+			}
+
+			//pathline();
+			//obtain the next contour
+			contours_LEt = contours_LEt->h_next;
+		}
+
+		cvShowImage("Original", p_imgOriginal);						//original image with circle overlay
+		cvShowImage("Right_T", imgGrayScale_RIts);					//image after processing
+		cvShowImage("Left_T", imgGrayScale_LEts);
+
+		char c = cvWaitKey(10);
+		if (c == 'c')
+			break;
+
+	}
+}
+
