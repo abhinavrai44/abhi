@@ -1,0 +1,179 @@
+int ml1=5;
+int ml2=6;
+int mr1=10;
+int mr2=11;
+int led=13;
+
+int port;
+///////////////////
+
+int o_minspeed=90,minspeed=90,t_speed=250,error=16,r_correction=-20;// 90 90 150 18 35
+int dtime=80,o_dtime=80,ttime=20,atime=2000;// 80 80 45 400
+
+///////////////////////////////////
+
+int xr;
+
+boolean string=true,ori=false,action=false,cal=false,motorread=false;
+
+void setup()
+{
+  Serial.begin(9600);
+  pinMode(led,OUTPUT);
+  pinMode(ml1,OUTPUT);
+  pinMode(ml2,OUTPUT);
+  pinMode(mr1,OUTPUT);
+  pinMode(mr2,OUTPUT);
+  analogWrite(ml1,0);analogWrite(mr1,0);
+  analogWrite(ml2,0);analogWrite(mr2,0);
+        
+}
+void loop()
+{
+  if(Serial.available() > 0)
+  {
+    char c;
+    int i;
+    c = Serial.read();
+  if (c=='w')
+{
+  Serial.print(c);
+  analogWrite(ml1,255);
+  analogWrite(ml2,0);
+  analogWrite(mr1,255);
+  analogWrite(mr2,0);
+}
+if (c=='s')
+{
+  Serial.print(c);
+  analogWrite(ml1,0);
+  analogWrite(ml2,255);
+  analogWrite(mr1,0);
+  analogWrite(mr2,255);
+}
+if (c=='a')
+{
+  Serial.print(c);
+  analogWrite(ml1,255);
+  analogWrite(ml2,0);
+  analogWrite(mr1,0);
+  analogWrite(mr2,0);
+}
+if (c=='d')
+{
+  Serial.print(c);
+  analogWrite(mr1,0);
+  analogWrite(mr2,0);
+  analogWrite(ml1,255);
+  analogWrite(ml2,0);
+}
+if (c==' ')
+{
+  Serial.print(c);
+  analogWrite(mr1,0);
+  analogWrite(mr2,0);
+  analogWrite(ml1,0);
+  analogWrite(ml2,0);
+}
+
+      
+     if(motorread && string)
+     {
+     //Serial.print(c);
+        
+         motorread=false;
+         switch (c) 
+         {
+                case '0':xr=0;cal=true;break;
+                case '1':xr=1;cal=true;break;
+                case '2':xr=2;cal=true;break;
+                case '3':xr=3;cal=true;break;
+                case '4':xr=4;cal=true;break;
+                case '5':xr=5;cal=true;break;
+                case '6':xr=6;cal=true;break;
+                case '7':xr=7;cal=true;break;
+                case '8':xr=8;cal=true;break;
+                case '9':xr=9;cal=true;break;
+                  
+         }
+         
+        if(cal)
+        {
+          if(xr==0)
+            analogWrite(port,0);//delay(dtime);
+            Serial.print(port);
+            Serial.print("->");
+            Serial.print(xr*error+minspeed);
+            Serial.println("");
+            
+          analogWrite(port,xr*error+minspeed);//delay(dtime);
+          cal=false;
+        }
+     }
+     
+     if(ori && string)
+     {
+       ori=false;
+       switch(c)
+       {
+         
+         case 'a':analogWrite(ml1,0);analogWrite(mr1,t_speed);analogWrite(ml2,t_speed);analogWrite(mr2,0);break;//delay(dtime);break;
+         case 'c':analogWrite(ml1,t_speed);analogWrite(mr1,0);analogWrite(ml2,0);analogWrite(mr2,t_speed);break;
+       }
+       dtime=ttime;
+       
+     }
+     
+     if(action && string)
+     {
+       action=false;
+       switch(c)
+       {
+         case '0':break;
+         case '1':analogWrite(ml1,0);analogWrite(mr1,0);analogWrite(ml2,0);analogWrite(mr2,0);delay(atime);break;
+         case '2':digitalWrite(led,HIGH);delay(atime);digitalWrite(led,LOW);break;
+         
+       }
+       
+     }
+     
+     if(c=='$')
+      {
+        string=true;
+      }
+      if(c=='#')
+      {
+        delay(dtime);
+        //
+        analogWrite(ml1,0);analogWrite(mr1,0);
+        analogWrite(ml2,0);analogWrite(mr2,0);
+        string=false;
+        dtime=o_dtime;
+       
+      }
+     
+     if(c=='l')
+     {
+        port=ml1;
+        minspeed=o_minspeed;
+        motorread=true;
+     }
+     if(c=='r')
+     {
+        port=mr1;
+        minspeed=o_minspeed-r_correction;
+        motorread=true;
+     }
+    
+     if(c=='o')
+     {
+       ori=true;
+     }
+     if(c=='@')
+     {
+       action=true;
+     }
+     
+     
+  }   
+}
