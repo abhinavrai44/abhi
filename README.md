@@ -8,3 +8,5 @@ https://plus.google.com/photos/112888910524523490278/albums/6123956290188760097/
 Here every figure has a specific meaning. For ex. plus can turn in any 4 direction, triangle turn towards the 3rd vertice, square go straight and red forbidden.
 
 We need to generate a track and guide our bot to the end point.
+
+The source file has the C/C++ code with opencv libraries for generating the path and controlling the bot. The Arduino file has arduino program to interpret the commands transferred from the source file.
